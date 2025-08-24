@@ -7,37 +7,64 @@
     <link rel="stylesheet" href="style.css">
     <!-- Import Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Import JSZip library for downloading profiles -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>My Shared Gallery</h1>
-        
-        <div class="upload-area">
-            <!-- The form that handles the file upload -->
-            <form id="upload-form">
-                <p><strong>Step 1:</strong> Enter your name or device</p>
-                <input type="text" id="username-input" placeholder="e.g., John's Phone" required>
 
-                <p style="margin-top: 1.5rem;"><strong>Step 2:</strong> Select photo(s)</p>
-                <!-- MODIFIED: Added the 'multiple' attribute to allow selecting more than one file -->
-                <input type="file" id="photo-input" name="photo" accept="image/*" required multiple>
-                
-                <button type="submit" id="upload-button" disabled>Upload Photos</button>
-            </form>
+    <nav class="main-nav">
+        <a href="#" id="nav-uploader" class="nav-link active">Uploader & Profiles</a>
+        <a href="#" id="nav-gallery" class="nav-link">Full Gallery</a>
+    </nav>
 
-            <div id="status-message"></div>
+    <div id="uploader-view" class="view active">
+        <div class="container">
+            <h1>My Shared Gallery</h1>
+            
+            <div class="upload-area">
+                <form id="upload-form">
+                    <p><strong>Step 1:</strong> Enter your name or device</p>
+                    <input type="text" id="username-input" placeholder="e.g., John's Phone" required>
 
-            <!-- This area will now show a count of selected files -->
-            <div class="preview-area" id="preview-text"></div>
-        </div>
+                    <p style="margin-top: 1.5rem;"><strong>Step 2:</strong> Select photo(s)</p>
+                    <input type="file" id="photo-input" name="photo" accept="image/*" required multiple>
+                    
+                    <button type="submit" id="upload-button" disabled>Upload Photos</button>
+                </form>
 
-        <hr>
+                <div id="status-message"></div>
+                <div class="preview-area" id="preview-text"></div>
+            </div>
 
-        <h2>Gallery</h2>
-        <div id="gallery">
-            <p>Your uploaded photos will appear here...</p>
+            <hr>
+
+            <h2>Profiles</h2>
+            <div id="profiles-gallery">
+                <p>Your uploaded photos will appear here, grouped by user...</p>
+            </div>
         </div>
     </div>
+
+    <div id="gallery-view" class="view">
+        <div class="gallery-container">
+            <h1>Full Gallery</h1>
+            <div id="gallery-grid">
+                <!-- All photos will be dynamically loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Full-screen Lightbox Modal -->
+    <div id="lightbox" class="lightbox">
+        <span id="close-btn" class="lightbox-btn close">&times;</span>
+        <span id="prev-btn" class="lightbox-btn prev">&#10094;</span>
+        <span id="next-btn" class="lightbox-btn next">&#10095;</span>
+        <div class="lightbox-content">
+            <img id="lightbox-img" src="" alt="Full-screen view">
+            <div id="lightbox-caption"></div>
+        </div>
+    </div>
+
 
     <script src="script.js"></script>
 </body>
