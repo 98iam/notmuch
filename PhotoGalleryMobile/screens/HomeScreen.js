@@ -11,6 +11,8 @@ import {
   Modal,
   Dimensions,
   Image,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { supabase } from '../App';
 import * as FileSystem from 'expo-file-system';
@@ -25,10 +27,48 @@ export default function HomeScreen({ navigation }) {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
+  const [panResponder, setPanResponder] = useState(null);
 
   useEffect(() => {
     loadPhotos();
   }, []);
+
+  // Initialize pinch gesture handler
+  useEffect(() => {
+    if (modalVisible) {
+      const _panResponder = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          // Handle single touch (for potential future features)
+        },
+        onPanResponderMove: (evt) => {
+          if (evt.nativeEvent.touches.length === 2) {
+            // Handle pinch gesture
+            const touches = evt.nativeEvent.touches;
+            const touch1 = touches[0];
+            const touch2 = touches[1];
+
+            const distance = Math.sqrt(
+              Math.pow(touch2.pageX - touch1.pageX, 2) +
+              Math.pow(touch2.pageY - touch1.pageY, 2)
+            );
+
+            // Calculate new scale based on distance
+            const newScale = Math.min(Math.max(distance / 200, 1), 3);
+            setZoomScale(newScale);
+          }
+        },
+        onPanResponderRelease: () => {
+          // Reset to minimum scale if too small
+          if (zoomScale < 1) {
+            setZoomScale(1);
+          }
+        },
+      });
+      setPanResponder(_panResponder);
+    }
+  }, [modalVisible, zoomScale]);
 
   const loadPhotos = async () => {
     try {
@@ -390,6 +430,7 @@ export default function HomeScreen({ navigation }) {
                         source={{ uri: publicUrl }}
                         style={[styles.fullScreenImage, { transform: [{ scale: zoomScale }] }]}
                         resizeMode="contain"
+                        {...panResponder?.panHandlers}
                       />
                     </View>
                   );

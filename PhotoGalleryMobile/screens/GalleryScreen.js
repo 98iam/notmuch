@@ -24,6 +24,45 @@ export default function GalleryScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panResponder, setPanResponder] = useState(null);
+
+  // Initialize pinch gesture handler
+  useEffect(() => {
+    if (modalVisible) {
+      const _panResponder = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          // Handle single touch (for potential future features)
+        },
+        onPanResponderMove: (evt) => {
+          if (evt.nativeEvent.touches.length === 2) {
+            // Handle pinch gesture
+            const touches = evt.nativeEvent.touches;
+            const touch1 = touches[0];
+            const touch2 = touches[1];
+
+            const distance = Math.sqrt(
+              Math.pow(touch2.pageX - touch1.pageX, 2) +
+              Math.pow(touch2.pageY - touch1.pageY, 2)
+            );
+
+            // Calculate new scale based on distance
+            const newScale = Math.min(Math.max(distance / 200, 1), 3);
+            setZoomScale(newScale);
+          }
+        },
+        onPanResponderRelease: () => {
+          // Reset to minimum scale if too small
+          if (zoomScale < 1) {
+            setZoomScale(1);
+          }
+        },
+      });
+      setPanResponder(_panResponder);
+    }
+  }, [modalVisible, zoomScale]);
 
   useEffect(() => {
     loadPhotos();
@@ -240,8 +279,9 @@ export default function GalleryScreen({ navigation }) {
                     <View key={photo.id} style={styles.fullScreenImageWrapper}>
                       <Image
                         source={{ uri: publicUrl }}
-                        style={styles.fullScreenImage}
+                        style={[styles.fullScreenImage, { transform: [{ scale: zoomScale }] }]}
                         resizeMode="contain"
+                        {...panResponder?.panHandlers}
                       />
                     </View>
                   );
