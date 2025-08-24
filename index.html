@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Photo Gallery</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Import Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>My Shared Gallery</h1>
+        
+        <div class="upload-area">
+            <!-- The form that handles the file upload -->
+            <form id="upload-form">
+                <p><strong>Step 1:</strong> Enter your name or device</p>
+                <input type="text" id="username-input" placeholder="e.g., John's Phone" required>
+
+                <p style="margin-top: 1.5rem;"><strong>Step 2:</strong> Select photo(s)</p>
+                <!-- MODIFIED: Added the 'multiple' attribute to allow selecting more than one file -->
+                <input type="file" id="photo-input" name="photo" accept="image/*" required multiple>
+                
+                <button type="submit" id="upload-button" disabled>Upload Photos</button>
+            </form>
+
+            <div id="status-message"></div>
+
+            <!-- This area will now show a count of selected files -->
+            <div class="preview-area" id="preview-text"></div>
+        </div>
+
+        <hr>
+
+        <h2>Gallery</h2>
+        <div id="gallery">
+            <p>Your uploaded photos will appear here...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
