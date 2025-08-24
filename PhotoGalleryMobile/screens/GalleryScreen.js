@@ -11,6 +11,8 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
+  PanResponder,
 } from 'react-native';
 import { supabase } from '../App';
 
@@ -20,7 +22,7 @@ export default function GalleryScreen({ navigation }) {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
@@ -57,13 +59,20 @@ export default function GalleryScreen({ navigation }) {
   };
 
   const openPhotoModal = (photo) => {
-    setSelectedPhoto(photo);
+    const index = photos.findIndex(p => p.id === photo.id);
+    setSelectedPhotoIndex(index);
     setModalVisible(true);
   };
 
   const closePhotoModal = () => {
     setModalVisible(false);
-    setSelectedPhoto(null);
+  };
+
+  const navigatePhoto = (direction) => {
+    let newIndex = selectedPhotoIndex + direction;
+    if (newIndex >= 0 && newIndex < photos.length) {
+      setSelectedPhotoIndex(newIndex);
+    }
   };
 
   const handleDeletePhoto = async (photo) => {
@@ -88,7 +97,13 @@ export default function GalleryScreen({ navigation }) {
 
               Alert.alert('Success', 'Photo deleted successfully!');
               loadPhotos();
-              closePhotoModal();
+              // Close modal if this was the last photo
+              if (photos.length <= 1) {
+                closePhotoModal();
+              } else if (selectedPhotoIndex >= photos.length - 1) {
+                // If we deleted the last photo, go to previous
+                setSelectedPhotoIndex(Math.max(0, selectedPhotoIndex - 1));
+              }
             } catch (error) {
               console.error('Error deleting photo:', error);
               Alert.alert('Error', 'Failed to delete photo');
@@ -173,66 +188,99 @@ export default function GalleryScreen({ navigation }) {
         />
       )}
 
-      {/* Photo Modal */}
+      {/* Full-Screen Image Viewer */}
       <Modal
         visible={modalVisible}
         transparent={true}
         animationType="fade"
         onRequestClose={closePhotoModal}
       >
-        <View style={styles.modalContainer}>
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={closePhotoModal}
-          >
-            <View style={styles.modalContent}>
-              {selectedPhoto && (
-                <>
-                  {(() => {
-                    const { data: { publicUrl } } = supabase.storage
-                      .from('photos')
-                      .getPublicUrl(selectedPhoto.file_path);
+        <View style={styles.fullScreenContainer}>
+          {/* Header with photo info and close button */}
+          <View style={styles.fullScreenHeader}>
+            <View style={styles.photoInfo}>
+              <Text style={styles.fullScreenUsername}>
+                {photos[selectedPhotoIndex]?.username || 'Anonymous'}
+              </Text>
+              <Text style={styles.fullScreenCounter}>
+                {selectedPhotoIndex + 1} / {photos.length}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={closePhotoModal}
+            >
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
 
-                    return (
+          {/* Full-screen image with swipe gestures */}
+          <View style={styles.fullScreenImageContainer}>
+            {photos[selectedPhotoIndex] && (
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(event) => {
+                  const slideSize = event.nativeEvent.layoutMeasurement.width;
+                  const index = event.nativeEvent.contentOffset.x / slideSize;
+                  const roundedIndex = Math.round(index);
+                  if (roundedIndex !== selectedPhotoIndex) {
+                    setSelectedPhotoIndex(roundedIndex);
+                  }
+                }}
+                style={styles.imageScrollView}
+              >
+                {photos.map((photo, index) => {
+                  const { data: { publicUrl } } = supabase.storage
+                    .from('photos')
+                    .getPublicUrl(photo.file_path);
+
+                  return (
+                    <View key={photo.id} style={styles.fullScreenImageWrapper}>
                       <Image
                         source={{ uri: publicUrl }}
-                        style={styles.modalImage}
+                        style={styles.fullScreenImage}
                         resizeMode="contain"
                       />
-                    );
-                  })()}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
 
-                  <View style={styles.modalInfo}>
-                    <Text style={styles.modalUsername}>
-                      Uploaded by: {selectedPhoto.username || 'Anonymous'}
-                    </Text>
-                    <Text style={styles.modalFilename}>
-                      File: {selectedPhoto.file_name}
-                    </Text>
-                    <Text style={styles.modalDate}>
-                      Date: {new Date(selectedPhoto.created_at).toLocaleDateString()}
-                    </Text>
-                  </View>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.modalDeleteButton}
-                      onPress={() => handleDeletePhoto(selectedPhoto)}
-                    >
-                      <Text style={styles.modalDeleteButtonText}>🗑️ Delete Photo</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.modalCloseButton}
-                      onPress={closePhotoModal}
-                    >
-                      <Text style={styles.modalCloseButtonText}>✕ Close</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
+          {/* Navigation arrows */}
+          {photos.length > 1 && (
+            <>
+              {selectedPhotoIndex > 0 && (
+                <TouchableOpacity
+                  style={[styles.navArrow, styles.leftArrow]}
+                  onPress={() => navigatePhoto(-1)}
+                >
+                  <Text style={styles.arrowText}>❮</Text>
+                </TouchableOpacity>
               )}
-            </View>
-          </TouchableOpacity>
+              {selectedPhotoIndex < photos.length - 1 && (
+                <TouchableOpacity
+                  style={[styles.navArrow, styles.rightArrow]}
+                  onPress={() => navigatePhoto(1)}
+                >
+                  <Text style={styles.arrowText}>❯</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+
+          {/* Bottom actions */}
+          <View style={styles.fullScreenActions}>
+            <TouchableOpacity
+              style={styles.deleteActionButton}
+              onPress={() => handleDeletePhoto(photos[selectedPhotoIndex])}
+            >
+              <Text style={styles.deleteActionButtonText}>🗑️ Delete</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
@@ -406,6 +454,99 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalCloseButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  // Full-screen viewer styles
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  fullScreenHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 50, // Account for status bar
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  photoInfo: {
+    flex: 1,
+  },
+  fullScreenUsername: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  fullScreenCounter: {
+    color: '#ccc',
+    fontSize: 14,
+  },
+  closeButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  fullScreenImageContainer: {
+    flex: 1,
+  },
+  imageScrollView: {
+    flex: 1,
+  },
+  fullScreenImageWrapper: {
+    width: width,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: width,
+    height: height * 0.8,
+  },
+  navArrow: {
+    position: 'absolute',
+    top: '50%',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 30,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -30,
+  },
+  leftArrow: {
+    left: 20,
+  },
+  rightArrow: {
+    right: 20,
+  },
+  arrowText: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: 'bold',
+  },
+  fullScreenActions: {
+    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingBottom: 40,
+  },
+  deleteActionButton: {
+    backgroundColor: '#dc3545',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  deleteActionButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
