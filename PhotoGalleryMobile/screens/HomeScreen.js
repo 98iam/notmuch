@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,15 @@ import {
   Modal,
   Dimensions,
   Image,
-  PanResponder,
   Animated,
 } from 'react-native';
 import { supabase } from '../App';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import {
+  PinchGestureHandler,
+  State,
+} from 'react-native-gesture-handler';
 
 const { width, height } = Dimensions.get('window');
 
@@ -26,49 +29,12 @@ export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
-  const [zoomScale, setZoomScale] = useState(1);
-  const [panResponder, setPanResponder] = useState(null);
+  const scale = useRef(new Animated.Value(1)).current;
+  const pinchRef = useRef();
 
   useEffect(() => {
     loadPhotos();
   }, []);
-
-  // Initialize pinch gesture handler
-  useEffect(() => {
-    if (modalVisible) {
-      const _panResponder = PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          // Handle single touch (for potential future features)
-        },
-        onPanResponderMove: (evt) => {
-          if (evt.nativeEvent.touches.length === 2) {
-            // Handle pinch gesture
-            const touches = evt.nativeEvent.touches;
-            const touch1 = touches[0];
-            const touch2 = touches[1];
-
-            const distance = Math.sqrt(
-              Math.pow(touch2.pageX - touch1.pageX, 2) +
-              Math.pow(touch2.pageY - touch1.pageY, 2)
-            );
-
-            // Calculate new scale based on distance
-            const newScale = Math.min(Math.max(distance / 200, 1), 3);
-            setZoomScale(newScale);
-          }
-        },
-        onPanResponderRelease: () => {
-          // Reset to minimum scale if too small
-          if (zoomScale < 1) {
-            setZoomScale(1);
-          }
-        },
-      });
-      setPanResponder(_panResponder);
-    }
-  }, [modalVisible, zoomScale]);
 
   const loadPhotos = async () => {
     try {
@@ -174,33 +140,44 @@ export default function HomeScreen({ navigation }) {
     const index = photos.findIndex(p => p.id === photo.id);
     setSelectedPhotoIndex(index);
     setModalVisible(true);
-    setZoomScale(1);
+    scale.setValue(1);
   };
 
   const closePhotoModal = () => {
     setModalVisible(false);
-    setZoomScale(1);
+    scale.setValue(1);
   };
 
   const navigatePhoto = (direction) => {
     let newIndex = selectedPhotoIndex + direction;
     if (newIndex >= 0 && newIndex < photos.length) {
       setSelectedPhotoIndex(newIndex);
-      setZoomScale(1);
+      scale.setValue(1);
     }
   };
 
-  const handleZoomIn = () => {
-    if (zoomScale < 3) {
-      setZoomScale(zoomScale + 0.5);
+  // Pinch gesture handlers
+  const onPinchEvent = Animated.event(
+    [
+      {
+        nativeEvent: { scale: scale }
+      }
+    ],
+    {
+      useNativeDriver: true
+    }
+  );
+
+  const onPinchStateChange = (event) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true
+      }).start();
     }
   };
 
-  const handleZoomOut = () => {
-    if (zoomScale > 1) {
-      setZoomScale(Math.max(1, zoomScale - 0.5));
-    }
-  };
+
 
   const handleDeletePhoto = async (photo) => {
     Alert.alert(
@@ -402,7 +379,7 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Full-screen image with swipe gestures */}
+          {/* Full-screen image with proper gesture handling */}
           <View style={styles.fullScreenImageContainer}>
             {photos[selectedPhotoIndex] && (
               <ScrollView
@@ -415,9 +392,11 @@ export default function HomeScreen({ navigation }) {
                   const roundedIndex = Math.round(index);
                   if (roundedIndex !== selectedPhotoIndex) {
                     setSelectedPhotoIndex(roundedIndex);
+                    scale.setValue(1); // Reset zoom when changing photos
                   }
                 }}
                 style={styles.imageScrollView}
+                scrollEnabled={true} // Let the pinch handler manage scrolling
               >
                 {photos.map((photo, index) => {
                   const { data: { publicUrl } } = supabase.storage
@@ -426,12 +405,19 @@ export default function HomeScreen({ navigation }) {
 
                   return (
                     <View key={photo.id} style={styles.fullScreenImageWrapper}>
-                      <Image
-                        source={{ uri: publicUrl }}
-                        style={[styles.fullScreenImage, { transform: [{ scale: zoomScale }] }]}
-                        resizeMode="contain"
-                        {...panResponder?.panHandlers}
-                      />
+                      <PinchGestureHandler
+                        ref={pinchRef}
+                        onGestureEvent={onPinchEvent}
+                        onHandlerStateChange={onPinchStateChange}
+                      >
+                        <Animated.View style={styles.pinchableContainer}>
+                          <Animated.Image
+                            source={{ uri: publicUrl }}
+                            style={[styles.fullScreenImage, { transform: [{ scale: scale }] }]}
+                            resizeMode="contain"
+                          />
+                        </Animated.View>
+                      </PinchGestureHandler>
                     </View>
                   );
                 })}
@@ -439,41 +425,10 @@ export default function HomeScreen({ navigation }) {
             )}
           </View>
 
-          {/* Navigation arrows */}
-          {photos.length > 1 && (
-            <>
-              {selectedPhotoIndex > 0 && (
-                <TouchableOpacity
-                  style={[styles.navArrow, styles.leftArrow]}
-                  onPress={() => navigatePhoto(-1)}
-                >
-                  <Text style={styles.arrowText}>❮</Text>
-                </TouchableOpacity>
-              )}
-              {selectedPhotoIndex < photos.length - 1 && (
-                <TouchableOpacity
-                  style={[styles.navArrow, styles.rightArrow]}
-                  onPress={() => navigatePhoto(1)}
-                >
-                  <Text style={styles.arrowText}>❯</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
+
 
           {/* Bottom actions */}
           <View style={styles.fullScreenActions}>
-            {/* Zoom controls */}
-            <View style={styles.zoomControls}>
-              <TouchableOpacity style={styles.zoomButton} onPress={handleZoomOut}>
-                <Text style={styles.zoomButtonText}>🔍-</Text>
-              </TouchableOpacity>
-              <Text style={styles.zoomText}>{zoomScale.toFixed(1)}x</Text>
-              <TouchableOpacity style={styles.zoomButton} onPress={handleZoomIn}>
-                <Text style={styles.zoomButtonText}>🔍+</Text>
-              </TouchableOpacity>
-            </View>
-
             <TouchableOpacity
               style={styles.deleteActionButton}
               onPress={() => handleDeletePhoto(photos[selectedPhotoIndex])}
@@ -717,60 +672,20 @@ const styles = StyleSheet.create({
     width: width,
     height: height * 0.8,
   },
-  navArrow: {
-    position: 'absolute',
-    top: '50%',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 30,
-    width: 60,
-    height: 60,
+  pinchableContainer: {
+    width: width,
+    height: height * 0.8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -30,
   },
-  leftArrow: {
-    left: 20,
-  },
-  rightArrow: {
-    right: 20,
-  },
-  arrowText: {
-    color: '#fff',
-    fontSize: 30,
-    fontWeight: 'bold',
-  },
+
   fullScreenActions: {
     padding: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingBottom: 40,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  zoomControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-  },
-  zoomButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  zoomButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  zoomText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    minWidth: 50,
-    textAlign: 'center',
   },
   deleteActionButton: {
     backgroundColor: '#dc3545',
